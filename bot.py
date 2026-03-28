@@ -8,6 +8,14 @@ from telegram.constants import ParseMode
 from config import TOKEN, ADMIN_ID, ALLOWED_USERS
 from database import Database
 
+# В начале файла, после других импортов
+try:
+    from keep_alive import start_webserver
+    start_webserver()
+except:
+    pass  # Локально игнорируем
+    
+
 # Для Windows и Python 3.14
 if sys.platform == 'win32':
     try:
