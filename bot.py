@@ -810,8 +810,11 @@ async def edit_category_name(update: Update, context: ContextTypes.DEFAULT_TYPE)
     context.user_data['admin_state'] = 'waiting_new_category_name'
     
     await query.edit_message_text(
-        "✏️ Введите новое название для категории:\n\n"
-        "Отправьте текстовое сообщение с новым названием.",
+        "✏️ *Изменение названия категории*\n\n"
+        "Введите новое название для категории:\n\n"
+        "Отправьте текстовое сообщение с новым названием.\n"
+        "Чтобы отменить, нажмите кнопку ниже.",
+        parse_mode=ParseMode.MARKDOWN,
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 Отмена", callback_data=f'edit_cat_{category_id}')]
         ])
@@ -826,9 +829,12 @@ async def edit_category_description(update: Update, context: ContextTypes.DEFAUL
     context.user_data['admin_state'] = 'waiting_new_category_description'
     
     await query.edit_message_text(
-        "📝 Введите новое описание для категории:\n\n"
+        "📝 *Изменение описания категории*\n\n"
+        "Введите новое описание для категории:\n\n"
         "Отправьте текстовое сообщение с новым описанием.\n"
-        "Чтобы оставить описание пустым, отправьте '-'",
+        "Чтобы оставить описание пустым, отправьте '-'\n"
+        "Чтобы отменить, нажмите кнопку ниже.",
+        parse_mode=ParseMode.MARKDOWN,
         reply_markup=InlineKeyboardMarkup([
             [InlineKeyboardButton("🔙 Отмена", callback_data=f'edit_cat_{category_id}')]
         ])
