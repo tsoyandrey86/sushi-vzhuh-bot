@@ -26,7 +26,6 @@ db = Database()
 
 # ========== ПРОВЕРКА ДОСТУПА ==========
 
-
 async def check_admin(update: Update) -> bool:
     """Проверка, является ли пользователь администратором"""
     user_id = update.effective_user.id
@@ -102,346 +101,6 @@ def restricted(func):
         return await func(update, context, *args, **kwargs)
     return wrapper
 
-async def check_access(update: Update) -> bool:
-    user_id = update.effective_user.id
-    
-    if user_id == ADMIN_ID:
-        return True
-    
-    if user_id in ALLOWED_USERS:
-        return True
-    
-    if db.is_user_allowed(user_id):
-        return True
-    
-    return False
-
-def restricted(func):
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE, *args, **kwargs):
-        if not await check_access(update):
-            if update.message:
-                keyboard = [
-                    [InlineKeyboardButton("📝 Запросить доступ", callback_data='request_access')],
-                    [InlineKeyboardButton("ℹ️ Что делать?", callback_data='help_access')]
-                ]
-                reply_markup = InlineKeyboardMarkup(keyboard)
-                
-                await update.message.reply_text(
-                    "⛔ *Доступ запрещен*\n\n"
-                    "Этот бот предназначен только для ограниченного круга пользователей.\n\n"
-                    "👤 *Ваш ID:* `{}`\n\n"
-                    "Вы можете запросить доступ у администратора, нажав на кнопку ниже.".format(
-                        update.effective_user.id
-                    ),
-                    parse_mode=ParseMode.MARKDOWN,
-                    reply_markup=reply_markup
-                )
-            elif update.callback_query:
-                await update.callback_query.answer("Доступ запрещен", show_alert=True)
-            return
-        return await func(update, context, *args, **kwargs)
-    return wrapper
-
-# ========== УПРАВЛЕНИЕ АДМИНИСТРАТОРАМИ ==========
-
-async def admin_management(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Меню управления администраторами (только главный админ)"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Только главный админ может управлять другими админами
-    if not await check_admin(update):
-        await query.answer("Только главный администратор может управлять админами!", show_alert=True)
-        return
-    
-    keyboard = [
-        [InlineKeyboardButton("➕ Добавить администратора", callback_data='admin_add_admin')],
-        [InlineKeyboardButton("➖ Удалить администратора", callback_data='admin_remove_admin')],
-        [InlineKeyboardButton("📋 Список администраторов", callback_data='admin_list_admins')],
-        [InlineKeyboardButton("🔙 Назад", callback_data='admin')]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.edit_message_text(
-        "👑 *Управление администраторами*\n\n"
-        "Здесь вы можете назначать и удалять администраторов.\n\n"
-        "Администраторы имеют доступ к админ-панели и могут:\n"
-        "• Добавлять/удалять видео\n"
-        "• Управлять категориями\n"
-        "• Управлять заявками на доступ\n"
-        "• Добавлять/удалять пользователей\n\n"
-        "⚠️ *Внимание:* Только главный администратор может управлять другими админами.",
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-async def add_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Панель добавления администратора"""
-    query = update.callback_query
-    await query.answer()
-    
-    if not await check_admin(update):
-        await query.answer("Только главный администратор!", show_alert=True)
-        return
-    
-    context.user_data['admin_state'] = 'waiting_user_id_to_add_admin'
-    
-    await query.edit_message_text(
-        "👑 *Добавление администратора*\n\n"
-        "Введите Telegram ID пользователя, которого хотите сделать администратором.\n\n"
-        "🔍 *Как найти ID пользователя:*\n"
-        "1. Попросите пользователя отправить /id в любом боте\n"
-        "2. Или используйте @userinfobot\n\n"
-        "📝 *Формат:* Просто число\n\n"
-        "Отправьте ID:",
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 Отмена", callback_data='admin_management')]
-        ])
-    )
-
-async def remove_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Панель удаления администратора"""
-    query = update.callback_query
-    await query.answer()
-    
-    if not await check_admin(update):
-        await query.answer("Только главный администратор!", show_alert=True)
-        return
-    
-    admins = db.get_admins()
-    
-    if not admins:
-        await query.edit_message_text(
-            "📭 Список администраторов пуст.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Назад", callback_data='admin_management')]
-            ])
-        )
-        return
-    
-    keyboard = []
-    for admin_id, added_at, added_by in admins:
-        if admin_id != ADMIN_ID:  # Не показываем главного админа для удаления
-            user_info = db.get_user_info(admin_id)
-            if user_info:
-                username, first_name, last_name = user_info
-                if first_name:
-                    name = first_name
-                    if last_name:
-                        name += f" {last_name}"
-                    if username:
-                        name += f" (@{username})"
-                elif username:
-                    name = f"@{username}"
-                else:
-                    name = str(admin_id)
-            else:
-                name = str(admin_id)
-            
-            keyboard.append([InlineKeyboardButton(f"🗑️ {name}", callback_data=f'remove_admin_{admin_id}')])
-    
-    if not keyboard:
-        await query.edit_message_text(
-            "📭 Нет администраторов для удаления (кроме главного).",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Назад", callback_data='admin_management')]
-            ])
-        )
-        return
-    
-    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='admin_management')])
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.edit_message_text(
-        "👑 *Выберите администратора для удаления:*\n\n"
-        "Нажмите на администратора, чтобы лишить его прав.",
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-async def list_admins_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать список администраторов"""
-    query = update.callback_query
-    await query.answer()
-    
-    admins = db.get_admins()
-    
-    if not admins:
-        await query.edit_message_text(
-            "📭 Список администраторов пуст.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Назад", callback_data='admin_management')]
-            ])
-        )
-        return
-    
-    text = "👑 *Список администраторов:*\n\n"
-    for i, (admin_id, added_at, added_by) in enumerate(admins, 1):
-        user_info = db.get_user_info(admin_id)
-        
-        if user_info:
-            username, first_name, last_name = user_info
-            if first_name:
-                name = first_name
-                if last_name:
-                    name += f" {last_name}"
-                if username:
-                    name += f" (@{username})"
-            elif username:
-                name = f"@{username}"
-            else:
-                name = str(admin_id)
-        else:
-            name = str(admin_id)
-        
-        text += f"{i}. **{name}**\n"
-        text += f"   🆔 `{admin_id}`\n"
-        
-        if isinstance(added_at, datetime):
-            date_str = added_at.strftime('%d.%m.%Y')
-            text += f"   📅 Назначен: {date_str}\n"
-        
-        if admin_id == ADMIN_ID:
-            text += "   👑 *Главный администратор*\n"
-        text += "\n"
-    
-    text += f"\n📊 *Всего:* {len(admins)} администраторов"
-    
-    keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='admin_management')]]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.edit_message_text(
-        text,
-        reply_markup=reply_markup,
-        parse_mode=ParseMode.MARKDOWN
-    )
-
-async def add_admin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Добавить администратора по ID"""
-    if not await check_admin(update):
-        return
-    
-    try:
-        user_id = int(update.message.text.strip())
-        
-        # Проверяем, не является ли уже администратором
-        if db.is_admin(user_id):
-            await update.message.reply_text(
-                f"ℹ️ Пользователь `{user_id}` уже является администратором.",
-                parse_mode=ParseMode.MARKDOWN
-            )
-            return
-        
-        # Добавляем как администратора
-        if db.add_admin(user_id, ADMIN_ID):
-            # Также добавляем в белый список, если его там нет
-            if not db.is_user_allowed(user_id):
-                db.add_allowed_user(user_id, ADMIN_ID)
-            
-            # Получаем информацию о пользователе
-            user_info = db.get_user_info(user_id)
-            if user_info:
-                username, first_name, last_name = user_info
-                if first_name:
-                    name = first_name
-                    if last_name:
-                        name += f" {last_name}"
-                else:
-                    name = str(user_id)
-            else:
-                name = str(user_id)
-            
-            await update.message.reply_text(
-                f"✅ Пользователь **{name}** назначен администратором!\n"
-                f"🆔 `{user_id}`",
-                parse_mode=ParseMode.MARKDOWN,
-                reply_markup=InlineKeyboardMarkup([
-                    [InlineKeyboardButton("🔙 Вернуться", callback_data='admin_management')]
-                ])
-            )
-            
-            # Уведомляем нового администратора
-            try:
-                await update.message.bot.send_message(
-                    chat_id=user_id,
-                    text="🎉 *Поздравляем!*\n\n"
-                         "Вы назначены администратором бота.\n\n"
-                         "Теперь вам доступна админ-панель со следующими возможностями:\n"
-                         "• Добавление и удаление видео\n"
-                         "• Управление категориями\n"
-                         "• Обработка заявок на доступ\n"
-                         "• Управление пользователями\n\n"
-                         "Нажмите /start для начала работы.",
-                    parse_mode=ParseMode.MARKDOWN
-                )
-            except Exception as e:
-                logger.error(f"Не удалось уведомить нового админа: {e}")
-        else:
-            await update.message.reply_text("❌ Ошибка при назначении администратора.")
-    
-    except ValueError:
-        await update.message.reply_text(
-            "❌ Неверный формат ID. Введите число.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Попробовать снова", callback_data='admin_add_admin')]
-            ])
-        )
-    
-    context.user_data['admin_state'] = None
-
-async def remove_admin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Удалить администратора"""
-    query = update.callback_query
-    await query.answer()
-    
-    admin_id = int(query.data.split('_')[2])
-    
-    if admin_id == ADMIN_ID:
-        await query.answer("Нельзя удалить главного администратора!", show_alert=True)
-        return
-    
-    if db.remove_admin(admin_id):
-        user_info = db.get_user_info(admin_id)
-        if user_info:
-            username, first_name, last_name = user_info
-            if first_name:
-                name = first_name
-                if last_name:
-                    name += f" {last_name}"
-            else:
-                name = str(admin_id)
-        else:
-            name = str(admin_id)
-        
-        await query.edit_message_text(
-            f"✅ Администратор **{name}** лишен прав!\n"
-            f"🆔 `{admin_id}`",
-            parse_mode=ParseMode.MARKDOWN,
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Вернуться", callback_data='admin_management')]
-            ])
-        )
-        
-        # Уведомляем пользователя
-        try:
-            await query.bot.send_message(
-                chat_id=admin_id,
-                text="⚠️ *Внимание!*\n\n"
-                     "Ваши права администратора были отозваны.\n\n"
-                     "Если вы считаете, что это ошибка, свяжитесь с главным администратором.",
-                parse_mode=ParseMode.MARKDOWN
-            )
-        except Exception as e:
-            logger.error(f"Не удалось уведомить бывшего админа: {e}")
-    else:
-        await query.edit_message_text(
-            "❌ Ошибка при удалении администратора.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 Назад", callback_data='admin_management')]
-            ])
-        )
-        
 # ========== ЗАПРОС ДОСТУПА ==========
 
 async def request_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -582,7 +241,6 @@ async def help_access(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========== УПРАВЛЕНИЕ ЗАЯВКАМИ (АДМИН) ==========
 
 async def admin_requests_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Панель управления заявками"""
     query = update.callback_query
     await query.answer()
     
@@ -609,7 +267,6 @@ async def admin_requests_panel(update: Update, context: ContextTypes.DEFAULT_TYP
     await show_request(update, context, 0)
 
 async def show_request(update: Update, context: ContextTypes.DEFAULT_TYPE, index):
-    """Показать конкретную заявку"""
     query = update.callback_query
     requests = context.user_data['requests_list']
     if index >= len(requests):
@@ -619,7 +276,6 @@ async def show_request(update: Update, context: ContextTypes.DEFAULT_TYPE, index
     request = requests[index]
     req_id, user_id, username, first_name, last_name, message, requested_at = request
     
-    # Безопасное форматирование даты
     try:
         if isinstance(requested_at, datetime):
             date_str = requested_at.strftime('%d.%m.%Y %H:%M')
@@ -668,7 +324,6 @@ async def show_request(update: Update, context: ContextTypes.DEFAULT_TYPE, index
     )
 
 async def next_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Следующая заявка"""
     query = update.callback_query
     await query.answer()
     
@@ -677,7 +332,6 @@ async def next_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_request(update, context, current_index + 1)
 
 async def prev_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Предыдущая заявка"""
     query = update.callback_query
     await query.answer()
     
@@ -686,7 +340,6 @@ async def prev_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await show_request(update, context, current_index - 1)
 
 async def approve_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Одобрить заявку"""
     query = update.callback_query
     await query.answer()
     
@@ -721,7 +374,6 @@ async def approve_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def reject_request(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Отклонить заявку"""
     query = update.callback_query
     await query.answer()
     
@@ -766,7 +418,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("ℹ️ О боте", callback_data='info')],
     ]
     
-    if user.id == ADMIN_ID:
+    if await check_admin(update):
         keyboard.append([InlineKeyboardButton("🔧 Админ панель", callback_data='admin')])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -895,7 +547,7 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Только потоковый просмотр\n"
         "• Доступ только по приглашению\n\n"
         f"👤 *Ваш ID:* `{update.effective_user.id}`\n\n"
-        "По всем вопросам: @admin"
+        "По всем вопросам: @tsoyandrey86"
     )
     
     keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='main')]]
@@ -910,7 +562,6 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ========== АДМИН ПАНЕЛЬ ==========
 
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обновленная админ панель с управлением администраторами"""
     query = update.callback_query
     await query.answer()
     
@@ -1225,7 +876,7 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [InlineKeyboardButton("ℹ️ О боте", callback_data='info')],
     ]
     
-    if user.id == ADMIN_ID:
+    if await check_admin(update):
         keyboard.append([InlineKeyboardButton("🔧 Админ панель", callback_data='admin')])
     
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -1265,7 +916,6 @@ async def access_management(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def add_user_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Панель добавления пользователя с подсказкой"""
     query = update.callback_query
     await query.answer()
     
@@ -1276,9 +926,7 @@ async def add_user_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "Введите Telegram ID пользователя, которого хотите добавить.\n\n"
         "🔍 *Как найти ID пользователя:*\n"
         "1. Попросите пользователя отправить /id в любом боте\n"
-        "2. Или используйте @userinfobot\n"
-        "3. Или попросите пользователя отправить любое сообщение этому боту, "
-        "и его ID появится в логах\n\n"
+        "2. Или используйте @userinfobot\n\n"
         "📝 *Формат:* Просто число\n\n"
         "Отправьте ID:",
         parse_mode=ParseMode.MARKDOWN,
@@ -1288,7 +936,6 @@ async def add_user_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def remove_user_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Панель удаления пользователя с именами"""
     query = update.callback_query
     await query.answer()
     
@@ -1304,8 +951,7 @@ async def remove_user_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     keyboard = []
     for user_id, added_at, added_by in users:
-        if user_id != ADMIN_ID:  # Не показываем админа для удаления
-            # Получаем информацию о пользователе
+        if user_id != ADMIN_ID:
             user_info = db.get_user_info(user_id)
             if user_info:
                 username, first_name, last_name = user_info
@@ -1344,7 +990,6 @@ async def remove_user_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def list_users_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Показать список пользователей с именами"""
     query = update.callback_query
     await query.answer()
     
@@ -1363,7 +1008,6 @@ async def list_users_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i, (user_id, added_at, added_by) in enumerate(users, 1):
         user_info = db.get_user_info(user_id)
         
-        # Формируем имя пользователя
         if user_info:
             username, first_name, last_name = user_info
             if first_name:
@@ -1382,7 +1026,6 @@ async def list_users_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += f"{i}. **{name}**\n"
         text += f"   🆔 `{user_id}`\n"
         
-        # Добавляем информацию о дате добавления
         if isinstance(added_at, datetime):
             date_str = added_at.strftime('%d.%m.%Y')
             text += f"   📅 Добавлен: {date_str}\n"
@@ -1403,7 +1046,6 @@ async def list_users_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def remove_user_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Удалить пользователя по ID с подтверждением"""
     query = update.callback_query
     await query.answer()
     
@@ -1412,71 +1054,10 @@ async def remove_user_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if user_id == ADMIN_ID:
         await query.answer("Нельзя удалить администратора!", show_alert=True)
         return
-    
-    # Получаем информацию о пользователе для отображения
-    user_info = db.get_user_info(user_id)
-    if user_info:
-        username, first_name, last_name = user_info
-        if first_name:
-            user_name = first_name
-            if last_name:
-                user_name += f" {last_name}"
-            if username:
-                user_name += f" (@{username})"
-        elif username:
-            user_name = f"@{username}"
-        else:
-            user_name = str(user_id)
-    else:
-        user_name = str(user_id)
-    
-    # Спрашиваем подтверждение
-    keyboard = [
-        [
-            InlineKeyboardButton("✅ Да, удалить", callback_data=f'confirm_remove_{user_id}'),
-            InlineKeyboardButton("❌ Нет", callback_data='access_remove')
-        ]
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    
-    await query.edit_message_text(
-        f"⚠️ *Подтверждение удаления*\n\n"
-        f"Вы уверены, что хотите удалить пользователя:\n"
-        f"**{user_name}**\n"
-        f"🆔 `{user_id}`\n\n"
-        f"После удаления пользователь потеряет доступ к боту.",
-        parse_mode=ParseMode.MARKDOWN,
-        reply_markup=reply_markup
-    )
-
-async def confirm_remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение удаления пользователя"""
-    query = update.callback_query
-    await query.answer()
-    
-    user_id = int(query.data.split('_')[2])
-    
-    if user_id == ADMIN_ID:
-        await query.answer("Нельзя удалить администратора!", show_alert=True)
-        return
-    
-    # Получаем имя для сообщения
-    user_info = db.get_user_info(user_id)
-    if user_info:
-        username, first_name, last_name = user_info
-        if first_name:
-            user_name = first_name
-            if last_name:
-                user_name += f" {last_name}"
-        else:
-            user_name = str(user_id)
-    else:
-        user_name = str(user_id)
     
     if db.remove_allowed_user(user_id):
         await query.edit_message_text(
-            f"✅ Пользователь **{user_name}** удален из белого списка!\n"
-            f"🆔 `{user_id}`",
+            f"✅ Пользователь `{user_id}` удален из белого списка!",
             parse_mode=ParseMode.MARKDOWN,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Вернуться", callback_data='access_management')]
@@ -1487,6 +1068,226 @@ async def confirm_remove_user(update: Update, context: ContextTypes.DEFAULT_TYPE
             "❌ Ошибка при удалении пользователя.",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("🔙 Назад", callback_data='access_management')]
+            ])
+        )
+
+# ========== УПРАВЛЕНИЕ АДМИНИСТРАТОРАМИ ==========
+
+async def admin_management(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if update.effective_user.id != ADMIN_ID:
+        await query.answer("Только главный администратор!", show_alert=True)
+        return
+    
+    keyboard = [
+        [InlineKeyboardButton("➕ Добавить администратора", callback_data='admin_add_admin')],
+        [InlineKeyboardButton("➖ Удалить администратора", callback_data='admin_remove_admin')],
+        [InlineKeyboardButton("📋 Список администраторов", callback_data='admin_list_admins')],
+        [InlineKeyboardButton("🔙 Назад", callback_data='admin')]
+    ]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "👑 *Управление администраторами*\n\n"
+        "Здесь вы можете назначать и удалять администраторов.\n\n"
+        "Администраторы имеют доступ к админ-панели и могут:\n"
+        "• Добавлять/удалять видео\n"
+        "• Управлять категориями\n"
+        "• Управлять заявками на доступ\n"
+        "• Добавлять/удалять пользователей\n\n"
+        "⚠️ *Внимание:* Только главный администратор может управлять другими админами.",
+        reply_markup=reply_markup,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def add_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if update.effective_user.id != ADMIN_ID:
+        await query.answer("Только главный администратор!", show_alert=True)
+        return
+    
+    context.user_data['admin_state'] = 'waiting_user_id_to_add_admin'
+    
+    await query.edit_message_text(
+        "👑 *Добавление администратора*\n\n"
+        "Введите Telegram ID пользователя, которого хотите сделать администратором.\n\n"
+        "🔍 *Как найти ID пользователя:*\n"
+        "1. Попросите пользователя отправить /id в любом боте\n"
+        "2. Или используйте @userinfobot\n\n"
+        "📝 *Формат:* Просто число\n\n"
+        "Отправьте ID:",
+        parse_mode=ParseMode.MARKDOWN,
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔙 Отмена", callback_data='admin_management')]
+        ])
+    )
+
+async def remove_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    if update.effective_user.id != ADMIN_ID:
+        await query.answer("Только главный администратор!", show_alert=True)
+        return
+    
+    admins = db.get_admins()
+    
+    if not admins:
+        await query.edit_message_text(
+            "📭 Список администраторов пуст.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Назад", callback_data='admin_management')]
+            ])
+        )
+        return
+    
+    keyboard = []
+    for admin_id, added_at, added_by in admins:
+        if admin_id != ADMIN_ID:
+            user_info = db.get_user_info(admin_id)
+            if user_info:
+                username, first_name, last_name = user_info
+                if first_name:
+                    name = first_name
+                    if last_name:
+                        name += f" {last_name}"
+                    if username:
+                        name += f" (@{username})"
+                elif username:
+                    name = f"@{username}"
+                else:
+                    name = str(admin_id)
+            else:
+                name = str(admin_id)
+            
+            keyboard.append([InlineKeyboardButton(f"🗑️ {name}", callback_data=f'remove_admin_{admin_id}')])
+    
+    if not keyboard:
+        await query.edit_message_text(
+            "📭 Нет администраторов для удаления (кроме главного).",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Назад", callback_data='admin_management')]
+            ])
+        )
+        return
+    
+    keyboard.append([InlineKeyboardButton("🔙 Назад", callback_data='admin_management')])
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        "👑 *Выберите администратора для удаления:*\n\n"
+        "Нажмите на администратора, чтобы лишить его прав.",
+        reply_markup=reply_markup,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def list_admins_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    admins = db.get_admins()
+    
+    if not admins:
+        await query.edit_message_text(
+            "📭 Список администраторов пуст.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Назад", callback_data='admin_management')]
+            ])
+        )
+        return
+    
+    text = "👑 *Список администраторов:*\n\n"
+    for i, (admin_id, added_at, added_by) in enumerate(admins, 1):
+        user_info = db.get_user_info(admin_id)
+        
+        if user_info:
+            username, first_name, last_name = user_info
+            if first_name:
+                name = first_name
+                if last_name:
+                    name += f" {last_name}"
+                if username:
+                    name += f" (@{username})"
+            elif username:
+                name = f"@{username}"
+            else:
+                name = str(admin_id)
+        else:
+            name = str(admin_id)
+        
+        text += f"{i}. **{name}**\n"
+        text += f"   🆔 `{admin_id}`\n"
+        
+        if isinstance(added_at, datetime):
+            date_str = added_at.strftime('%d.%m.%Y')
+            text += f"   📅 Назначен: {date_str}\n"
+        
+        if admin_id == ADMIN_ID:
+            text += "   👑 *Главный администратор*\n"
+        text += "\n"
+    
+    text += f"\n📊 *Всего:* {len(admins)} администраторов"
+    
+    keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='admin_management')]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await query.edit_message_text(
+        text,
+        reply_markup=reply_markup,
+        parse_mode=ParseMode.MARKDOWN
+    )
+
+async def remove_admin_by_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    
+    admin_id = int(query.data.split('_')[2])
+    
+    if admin_id == ADMIN_ID:
+        await query.answer("Нельзя удалить главного администратора!", show_alert=True)
+        return
+    
+    if db.remove_admin(admin_id):
+        user_info = db.get_user_info(admin_id)
+        if user_info:
+            username, first_name, last_name = user_info
+            if first_name:
+                name = first_name
+                if last_name:
+                    name += f" {last_name}"
+            else:
+                name = str(admin_id)
+        else:
+            name = str(admin_id)
+        
+        await query.edit_message_text(
+            f"✅ Администратор **{name}** лишен прав!\n"
+            f"🆔 `{admin_id}`",
+            parse_mode=ParseMode.MARKDOWN,
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Вернуться", callback_data='admin_management')]
+            ])
+        )
+        
+        try:
+            await query.bot.send_message(
+                chat_id=admin_id,
+                text="⚠️ *Внимание!*\n\n"
+                     "Ваши права администратора были отозваны.\n\n"
+                     "Если вы считаете, что это ошибка, свяжитесь с главным администратором.",
+                parse_mode=ParseMode.MARKDOWN
+            )
+        except Exception as e:
+            logger.error(f"Не удалось уведомить бывшего админа: {e}")
+    else:
+        await query.edit_message_text(
+            "❌ Ошибка при удалении администратора.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔙 Назад", callback_data='admin_management')]
             ])
         )
 
@@ -1639,9 +1440,83 @@ async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TY
             )
         
         context.user_data['admin_state'] = None
-        
+    
     elif state == 'waiting_user_id_to_add_admin':
-        await add_admin_by_id(update, context)
+        try:
+            user_id = int(update.message.text.strip())
+            
+            if db.is_admin(user_id):
+                await update.message.reply_text(
+                    f"ℹ️ Пользователь `{user_id}` уже является администратором.",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Вернуться", callback_data='admin_management')]
+                    ])
+                )
+                context.user_data['admin_state'] = None
+                return
+            
+            if db.add_admin(user_id, ADMIN_ID):
+                if not db.is_user_allowed(user_id):
+                    db.add_allowed_user(user_id, ADMIN_ID)
+                
+                user_info = db.get_user_info(user_id)
+                if user_info:
+                    username, first_name, last_name = user_info
+                    if first_name:
+                        name = first_name
+                        if last_name:
+                            name += f" {last_name}"
+                    else:
+                        name = str(user_id)
+                else:
+                    name = str(user_id)
+                
+                await update.message.reply_text(
+                    f"✅ Пользователь **{name}** назначен администратором!\n"
+                    f"🆔 `{user_id}`",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Вернуться", callback_data='admin_management')]
+                    ])
+                )
+                
+                try:
+                    await update.message.bot.send_message(
+                        chat_id=user_id,
+                        text="🎉 *Поздравляем!*\n\n"
+                             "Вы назначены администратором бота.\n\n"
+                             "Теперь вам доступна админ-панель.\n\n"
+                             "Нажмите /start для начала работы.",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                except Exception as e:
+                    logger.error(f"Не удалось уведомить нового админа: {e}")
+            else:
+                await update.message.reply_text(
+                    "❌ Ошибка при назначении администратора.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Вернуться", callback_data='admin_management')]
+                    ])
+                )
+        
+        except ValueError:
+            await update.message.reply_text(
+                "❌ Неверный формат ID. Введите число.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Попробовать снова", callback_data='admin_add_admin')]
+                ])
+            )
+        
+        context.user_data['admin_state'] = None
+    
+    else:
+        await update.message.reply_text(
+            "ℹ️ Админ режим активен. Используйте кнопки в админ панели.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔧 Открыть админ панель", callback_data='admin')]
+            ])
+        )
 
 async def close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -1677,12 +1552,6 @@ def main():
     application.add_handler(CallbackQueryHandler(remove_user_panel, pattern='^access_remove$'))
     application.add_handler(CallbackQueryHandler(list_users_panel, pattern='^access_list$'))
     application.add_handler(CallbackQueryHandler(remove_user_by_id, pattern='^remove_user_\\d+$'))
-    application.add_handler(CallbackQueryHandler(confirm_remove_user, pattern='^confirm_remove_\\d+$'))
-    application.add_handler(CallbackQueryHandler(admin_management, pattern='^admin_management$'))
-    application.add_handler(CallbackQueryHandler(add_admin_panel, pattern='^admin_add_admin$'))
-    application.add_handler(CallbackQueryHandler(remove_admin_panel, pattern='^admin_remove_admin$'))
-    application.add_handler(CallbackQueryHandler(list_admins_panel, pattern='^admin_list_admins$'))
-    application.add_handler(CallbackQueryHandler(remove_admin_by_id, pattern='^remove_admin_\\d+$'))
     
     # Обработчики для заявок
     application.add_handler(CallbackQueryHandler(request_access, pattern='^request_access$'))
@@ -1694,6 +1563,13 @@ def main():
     application.add_handler(CallbackQueryHandler(prev_request, pattern='^prev_request$'))
     application.add_handler(CallbackQueryHandler(approve_request, pattern='^approve_req_\\d+$'))
     application.add_handler(CallbackQueryHandler(reject_request, pattern='^reject_req_\\d+$'))
+    
+    # Обработчики для управления администраторами
+    application.add_handler(CallbackQueryHandler(admin_management, pattern='^admin_management$'))
+    application.add_handler(CallbackQueryHandler(add_admin_panel, pattern='^admin_add_admin$'))
+    application.add_handler(CallbackQueryHandler(remove_admin_panel, pattern='^admin_remove_admin$'))
+    application.add_handler(CallbackQueryHandler(list_admins_panel, pattern='^admin_list_admins$'))
+    application.add_handler(CallbackQueryHandler(remove_admin_by_id, pattern='^remove_admin_\\d+$'))
     
     # Обработчики сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_access_message))
