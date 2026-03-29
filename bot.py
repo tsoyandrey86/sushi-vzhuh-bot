@@ -627,6 +627,12 @@ async def admin_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     action = query.data.replace('admin_', '')
     
+    # ОТЛАДКА
+    logger.info(f"=== admin_action вызвана ===")
+    logger.info(f"Полный callback_data: {query.data}")
+    logger.info(f"Action: {action}")
+    # ===================
+    
     if action == 'add_video':
         context.user_data['admin_state'] = 'waiting_category_for_video'
         categories = db.get_categories()
@@ -1545,6 +1551,14 @@ async def close(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     await query.message.delete()
+    
+    
+async def test_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Тестовая функция для проверки callback"""
+    query = update.callback_query
+    await query.answer()
+    logger.info(f"=== TEST CALLBACK WORKS! Data: {query.data} ===")
+    await query.edit_message_text("✅ Тест пройден! Callback работает!")
 
 # ========== ЗАПУСК БОТА ==========
 
@@ -1601,6 +1615,8 @@ def main():
     
     logger.info("Бот запущен...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
+    
+    application.add_handler(CallbackQueryHandler(test_callback, pattern='^admin_management$'))
 
 if __name__ == '__main__':
     main()
