@@ -1568,14 +1568,17 @@ def main():
     # Обработчики команд
     application.add_handler(CommandHandler("start", start))
     
-    # Основные callback-обработчики
+    # ОСНОВНЫЕ CALLBACK-ОБРАБОТЧИКИ
     application.add_handler(CallbackQueryHandler(show_categories, pattern='^categories$'))
     application.add_handler(CallbackQueryHandler(show_videos, pattern='^cat_\\d+$'))
     application.add_handler(CallbackQueryHandler(play_video, pattern='^video_\\d+$'))
     application.add_handler(CallbackQueryHandler(info, pattern='^info$'))
     application.add_handler(CallbackQueryHandler(main_menu, pattern='^main$'))
     
-    # СПЕЦИФИЧНЫЕ ОБРАБОТЧИКИ ДЛЯ ADMIN (ВАЖНО: должны быть ПЕРЕД общим)
+    # АДМИН ПАНЕЛЬ (главная)
+    application.add_handler(CallbackQueryHandler(admin_panel, pattern='^admin$'))
+    
+    # СПЕЦИФИЧНЫЕ ОБРАБОТЧИКИ ДЛЯ admin_*
     application.add_handler(CallbackQueryHandler(admin_management, pattern='^admin_management$'))
     application.add_handler(CallbackQueryHandler(admin_requests_panel, pattern='^admin_requests$'))
     application.add_handler(CallbackQueryHandler(admin_edit_categories, pattern='^admin_edit_categories$'))
@@ -1584,10 +1587,10 @@ def main():
     application.add_handler(CallbackQueryHandler(list_admins_panel, pattern='^admin_list_admins$'))
     application.add_handler(CallbackQueryHandler(remove_admin_by_id, pattern='^remove_admin_\\d+$'))
     
-    # ОБЩИЙ ОБРАБОТЧИК (для остальных admin_*)
-    application.add_handler(CallbackQueryHandler(admin_action, pattern='^admin_\\w+$'))
+    # ОБЩИЙ ОБРАБОТЧИК (только для add_video, add_category, edit_categories, stats)
+    application.add_handler(CallbackQueryHandler(admin_action, pattern='^admin_(add_video|add_category|edit_categories|stats)$'))
     
-    # Остальные обработчики...
+    # Остальные обработчики
     application.add_handler(CallbackQueryHandler(select_category_for_video, pattern='^select_cat_\\d+$'))
     application.add_handler(CallbackQueryHandler(edit_category, pattern='^edit_cat_\\d+$'))
     application.add_handler(CallbackQueryHandler(edit_category_name, pattern='^edit_cat_name_\\d+$'))
