@@ -903,7 +903,7 @@ async def info(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• Только потоковый просмотр\n"
         "• Доступ только по приглашению\n\n"
         f"👤 *Ваш ID:* `{update.effective_user.id}`\n\n"
-        "По всем вопросам: @admin"
+        "По всем вопросам: @tsoyandrey86"
     )
     
     keyboard = [[InlineKeyboardButton("🔙 Назад", callback_data='main')]]
