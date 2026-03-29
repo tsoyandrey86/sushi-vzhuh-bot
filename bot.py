@@ -1100,7 +1100,7 @@ async def admin_management(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    if update.effective_user.id != ADMIN_ID:
+    if update.effective_user.id != 607683666:
         await query.answer("Только главный администратор!", show_alert=True)
         return
     
@@ -1129,7 +1129,7 @@ async def add_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     
-    if update.effective_user.id != ADMIN_ID:
+    if update.effective_user.id != 607683666:
         await query.answer("Только главный администратор!", show_alert=True)
         return
     
@@ -1153,7 +1153,7 @@ async def remove_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE)
     query = update.callback_query
     await query.answer()
     
-    if update.effective_user.id != ADMIN_ID:
+    if update.effective_user.id != 607683666:
         await query.answer("Только главный администратор!", show_alert=True)
         return
     
