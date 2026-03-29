@@ -8,6 +8,29 @@ from telegram.constants import ParseMode
 from config import TOKEN, ADMIN_ID, ALLOWED_USERS
 from database import Database
 
+# Добавьте в начало bot.py, после других импортов
+import threading
+from http.server import HTTPServer, BaseHTTPRequestHandler
+
+class HealthHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Bot is running!')
+    
+    def log_message(self, format, *args):
+        pass  # Отключаем логи
+
+def run_health_server():
+    try:
+        server = HTTPServer(('0.0.0.0', 10000), HealthHandler)
+        server.serve_forever()
+    except:
+        pass
+
+# Запускаем health-check сервер в фоне
+threading.Thread(target=run_health_server, daemon=True).start()
+
 # Для Windows и Python 3.14
 if sys.platform == 'win32':
     try:
