@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Получаем переменные окружения
-TOKEN = "8708743751:AAH1dfsL5Xr-voTXyGhl9WXZylQIPtnLd1U"  # Замените на токен вашего бота
+TOKEN = "8708743751:AAGIxq5HQu1eX0XXfdmxwFhwi4Gu3euRz-g"  # Замените на токен вашего бота
 ADMIN_ID = 607683666  # ID администратора (ваш Telegram ID)
 
 # Список разрешенных пользователей (можно добавлять через переменные окружения)
