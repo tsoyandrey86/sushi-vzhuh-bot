@@ -1568,16 +1568,27 @@ def main():
     # Обработчики команд
     application.add_handler(CommandHandler("start", start))
     
-    # Обработчики callback-запросов
+    # Основные callback-обработчики
     application.add_handler(CallbackQueryHandler(show_categories, pattern='^categories$'))
     application.add_handler(CallbackQueryHandler(show_videos, pattern='^cat_\\d+$'))
     application.add_handler(CallbackQueryHandler(play_video, pattern='^video_\\d+$'))
     application.add_handler(CallbackQueryHandler(info, pattern='^info$'))
     application.add_handler(CallbackQueryHandler(main_menu, pattern='^main$'))
-    application.add_handler(CallbackQueryHandler(admin_panel, pattern='^admin$'))
-    application.add_handler(CallbackQueryHandler(admin_action, pattern='^admin_\\w+$'))
-    application.add_handler(CallbackQueryHandler(select_category_for_video, pattern='^select_cat_\\d+$'))
+    
+    # СПЕЦИФИЧНЫЕ ОБРАБОТЧИКИ ДЛЯ ADMIN (ВАЖНО: должны быть ПЕРЕД общим)
+    application.add_handler(CallbackQueryHandler(admin_management, pattern='^admin_management$'))
+    application.add_handler(CallbackQueryHandler(admin_requests_panel, pattern='^admin_requests$'))
     application.add_handler(CallbackQueryHandler(admin_edit_categories, pattern='^admin_edit_categories$'))
+    application.add_handler(CallbackQueryHandler(add_admin_panel, pattern='^admin_add_admin$'))
+    application.add_handler(CallbackQueryHandler(remove_admin_panel, pattern='^admin_remove_admin$'))
+    application.add_handler(CallbackQueryHandler(list_admins_panel, pattern='^admin_list_admins$'))
+    application.add_handler(CallbackQueryHandler(remove_admin_by_id, pattern='^remove_admin_\\d+$'))
+    
+    # ОБЩИЙ ОБРАБОТЧИК (для остальных admin_*)
+    application.add_handler(CallbackQueryHandler(admin_action, pattern='^admin_\\w+$'))
+    
+    # Остальные обработчики...
+    application.add_handler(CallbackQueryHandler(select_category_for_video, pattern='^select_cat_\\d+$'))
     application.add_handler(CallbackQueryHandler(edit_category, pattern='^edit_cat_\\d+$'))
     application.add_handler(CallbackQueryHandler(edit_category_name, pattern='^edit_cat_name_\\d+$'))
     application.add_handler(CallbackQueryHandler(edit_category_description, pattern='^edit_cat_desc_\\d+$'))
@@ -1595,18 +1606,10 @@ def main():
     application.add_handler(CallbackQueryHandler(skip_message, pattern='^skip_message$'))
     application.add_handler(CallbackQueryHandler(help_access, pattern='^help_access$'))
     application.add_handler(CallbackQueryHandler(close, pattern='^close$'))
-    application.add_handler(CallbackQueryHandler(admin_requests_panel, pattern='^admin_requests$'))
     application.add_handler(CallbackQueryHandler(next_request, pattern='^next_request$'))
     application.add_handler(CallbackQueryHandler(prev_request, pattern='^prev_request$'))
     application.add_handler(CallbackQueryHandler(approve_request, pattern='^approve_req_\\d+$'))
     application.add_handler(CallbackQueryHandler(reject_request, pattern='^reject_req_\\d+$'))
-    
-    # Обработчики для управления администраторами
-    application.add_handler(CallbackQueryHandler(admin_management, pattern='^admin_management$'))
-    application.add_handler(CallbackQueryHandler(add_admin_panel, pattern='^admin_add_admin$'))
-    application.add_handler(CallbackQueryHandler(remove_admin_panel, pattern='^admin_remove_admin$'))
-    application.add_handler(CallbackQueryHandler(list_admins_panel, pattern='^admin_list_admins$'))
-    application.add_handler(CallbackQueryHandler(remove_admin_by_id, pattern='^remove_admin_\\d+$'))
     
     # Обработчики сообщений
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_access_message))
