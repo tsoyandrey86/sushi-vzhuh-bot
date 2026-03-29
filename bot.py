@@ -1647,6 +1647,122 @@ async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TY
             )
         
         context.user_data['admin_state'] = None
+    
+    # 👇 ДОБАВЛЯЕМ ОБРАБОТЧИК ДЛЯ ДОБАВЛЕНИЯ АДМИНИСТРАТОРА 👇
+    elif state == 'waiting_user_id_to_add_admin':
+        try:
+            user_id = int(update.message.text.strip())
+            
+            # Проверяем, не является ли уже администратором
+            if db.is_admin(user_id):
+                await update.message.reply_text(
+                    f"ℹ️ Пользователь `{user_id}` уже является администратором.",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Вернуться", callback_data='admin_management')]
+                    ])
+                )
+                context.user_data['admin_state'] = None
+                return
+            
+            # Добавляем как администратора
+            if db.add_admin(user_id, ADMIN_ID):
+                # Также добавляем в белый список, если его там нет
+                if not db.is_user_allowed(user_id):
+                    db.add_allowed_user(user_id, ADMIN_ID)
+                
+                # Получаем информацию о пользователе
+                user_info = db.get_user_info(user_id)
+                if user_info:
+                    username, first_name, last_name = user_info
+                    if first_name:
+                        name = first_name
+                        if last_name:
+                            name += f" {last_name}"
+                    else:
+                        name = str(user_id)
+                else:
+                    name = str(user_id)
+                
+                await update.message.reply_text(
+                    f"✅ Пользователь **{name}** назначен администратором!\n"
+                    f"🆔 `{user_id}`",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Вернуться", callback_data='admin_management')]
+                    ])
+                )
+                
+                # Уведомляем нового администратора
+                try:
+                    await update.message.bot.send_message(
+                        chat_id=user_id,
+                        text="🎉 *Поздравляем!*\n\n"
+                             "Вы назначены администратором бота.\n\n"
+                             "Теперь вам доступна админ-панель со следующими возможностями:\n"
+                             "• Добавление и удаление видео\n"
+                             "• Управление категориями\n"
+                             "• Обработка заявок на доступ\n"
+                             "• Управление пользователями\n\n"
+                             "Нажмите /start для начала работы.",
+                        parse_mode=ParseMode.MARKDOWN
+                    )
+                except Exception as e:
+                    logger.error(f"Не удалось уведомить нового админа: {e}")
+            else:
+                await update.message.reply_text(
+                    "❌ Ошибка при назначении администратора.",
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Вернуться", callback_data='admin_management')]
+                    ])
+                )
+        
+        except ValueError:
+            await update.message.reply_text(
+                "❌ Неверный формат ID. Введите число.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Попробовать снова", callback_data='admin_add_admin')]
+                ])
+            )
+        
+        context.user_data['admin_state'] = None
+    
+    else:
+        await update.message.reply_text(
+            "ℹ️ Админ режим активен. Используйте кнопки в админ панели.",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔧 Открыть админ панель", callback_data='admin')]
+            ])
+        )
+    
+    elif state == 'waiting_user_id_to_add':
+        try:
+            user_id = int(update.message.text.strip())
+            if db.add_allowed_user(user_id, ADMIN_ID):
+                await update.message.reply_text(
+                    f"✅ Пользователь `{user_id}` успешно добавлен в белый список!",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Вернуться", callback_data='access_management')]
+                    ])
+                )
+            else:
+                await update.message.reply_text(
+                    f"ℹ️ Пользователь `{user_id}` уже есть в белом списке.",
+                    parse_mode=ParseMode.MARKDOWN,
+                    reply_markup=InlineKeyboardMarkup([
+                        [InlineKeyboardButton("🔙 Вернуться", callback_data='access_management')]
+                    ])
+                )
+        except ValueError:
+            await update.message.reply_text(
+                "❌ Неверный формат ID. Введите число.",
+                reply_markup=InlineKeyboardMarkup([
+                    [InlineKeyboardButton("🔙 Попробовать снова", callback_data='access_add')]
+                ])
+            )
+        
+        context.user_data['admin_state'] = None
         
     elif state == 'waiting_user_id_to_add_admin':
         await add_admin_by_id(update, context)
