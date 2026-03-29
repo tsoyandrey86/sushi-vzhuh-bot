@@ -606,7 +606,7 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     
     # Кнопка управления администраторами только для главного админа
-    if update.effective_user.id == ADMIN_ID:
+    if update.effective_user.id == 607683666:
         keyboard.append([InlineKeyboardButton("👑 Управление админами", callback_data='admin_management')])
     
     keyboard.append([InlineKeyboardButton("📊 Статистика", callback_data='admin_stats')])
