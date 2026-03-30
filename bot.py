@@ -722,6 +722,7 @@ async def select_category_for_video(update: Update, context: ContextTypes.DEFAUL
 # ========== РЕДАКТИРОВАНИЕ КАТЕГОРИЙ ==========
 
 async def admin_edit_categories(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Показать список категорий для редактирования"""
     query = update.callback_query
     await query.answer()
     
@@ -732,8 +733,9 @@ async def admin_edit_categories(update: Update, context: ContextTypes.DEFAULT_TY
     
     if not categories:
         await query.edit_message_text(
-            "📭 Нет доступных категорий.\n\n"
-            "Сначала создайте категорию.",
+            "📭 *Нет доступных категорий*\n\n"
+            "Сначала создайте категорию, нажав кнопку ниже.",
+            parse_mode=ParseMode.MARKDOWN,
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton("➕ Создать категорию", callback_data='admin_add_category')],
                 [InlineKeyboardButton("🔙 Назад", callback_data='admin')]
@@ -1334,6 +1336,12 @@ async def handle_admin_messages(update: Update, context: ContextTypes.DEFAULT_TY
     
     state = context.user_data.get('admin_state')
     
+     # ОТЛАДКА
+    logger.info(f"=== handle_admin_messages ===")
+    logger.info(f"State: {state}")
+    logger.info(f"Message: {update.message.text if update.message.text else 'video'}")
+    # ===================
+    
     if state == 'waiting_category_name':
         category_name = update.message.text
         cursor = db.conn.cursor()
@@ -1627,8 +1635,7 @@ def main():
     
     logger.info("Бот запущен...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
-    
-    application.add_handler(CallbackQueryHandler(test_callback, pattern='^admin_management$'))
+
 
 if __name__ == '__main__':
     main()
